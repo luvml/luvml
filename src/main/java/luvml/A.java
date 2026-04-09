@@ -457,24 +457,96 @@ public final class A {
     return enumAttribute("target", value);
   }
 
-  public static EnumAttribute typeTextJavascript() {
-    return enumAttribute("type", "text/javascript");
+  public static EnumAttribute typeTel() {
+    return enumAttribute("type", "tel");
   }
 
-  public static EnumAttribute typeApplicationRssXml() {
-    return enumAttribute("type", "application/rss+xml");
+  public static EnumAttribute typeRadio() {
+    return enumAttribute("type", "radio");
   }
 
-  public static EnumAttribute typeTextCss() {
-    return enumAttribute("type", "text/css");
+  public static EnumAttribute typeSubmit() {
+    return enumAttribute("type", "submit");
   }
 
-  public static EnumAttribute typeImageXIcon() {
-    return enumAttribute("type", "image/x-icon");
+  public static EnumAttribute typeNumber() {
+    return enumAttribute("type", "number");
   }
 
-  public static ScopedEnumAttribute typeLink(String value) {
-    return scopedEnumAttribute("type", value, LINK_ELEMENTS);
+  public static EnumAttribute typeTime() {
+    return enumAttribute("type", "time");
+  }
+
+  public static EnumAttribute typeReset() {
+    return enumAttribute("type", "reset");
+  }
+
+  public static EnumAttribute typeDate() {
+    return enumAttribute("type", "date");
+  }
+
+  public static EnumAttribute typeColor() {
+    return enumAttribute("type", "color");
+  }
+
+  public static EnumAttribute typeMonth() {
+    return enumAttribute("type", "month");
+  }
+
+  public static EnumAttribute typeButton() {
+    return enumAttribute("type", "button");
+  }
+
+  public static EnumAttribute typeWeek() {
+    return enumAttribute("type", "week");
+  }
+
+  public static EnumAttribute typeFile() {
+    return enumAttribute("type", "file");
+  }
+
+  public static EnumAttribute typeHidden() {
+    return enumAttribute("type", "hidden");
+  }
+
+  public static EnumAttribute typeImage() {
+    return enumAttribute("type", "image");
+  }
+
+  public static EnumAttribute typeEmail() {
+    return enumAttribute("type", "email");
+  }
+
+  public static EnumAttribute typeRange() {
+    return enumAttribute("type", "range");
+  }
+
+  public static EnumAttribute typeText() {
+    return enumAttribute("type", "text");
+  }
+
+  public static EnumAttribute typeDatetimeLocal() {
+    return enumAttribute("type", "datetime-local");
+  }
+
+  public static EnumAttribute typeCheckbox() {
+    return enumAttribute("type", "checkbox");
+  }
+
+  public static EnumAttribute typeSearch() {
+    return enumAttribute("type", "search");
+  }
+
+  public static EnumAttribute typePassword() {
+    return enumAttribute("type", "password");
+  }
+
+  public static EnumAttribute typeUrl() {
+    return enumAttribute("type", "url");
+  }
+
+  public static ScopedEnumAttribute typeForm(String value) {
+    return scopedEnumAttribute("type", value, FORM_ELEMENTS);
   }
 
   public static HtmlAttribute value(String value) {
@@ -589,6 +661,10 @@ public final class A {
     return stringAttribute("ping", value);
   }
 
+  public static EnumAttribute referrerpolicyNoReferrerWhenDowngrade() {
+    return enumAttribute("referrerpolicy", "no-referrer-when-downgrade");
+  }
+
   public static EnumAttribute referrerpolicyOrigin() {
     return enumAttribute("referrerpolicy", "origin");
   }
@@ -617,12 +693,8 @@ public final class A {
     return enumAttribute("referrerpolicy", "strict-origin-when-cross-origin");
   }
 
-  public static EnumAttribute referrerpolicyNoReferrerWhenDowngrade() {
-    return enumAttribute("referrerpolicy", "no-referrer-when-downgrade");
-  }
-
   public static EnumAttribute referrerpolicy() {
-    return enumAttribute("referrerpolicy", "origin");
+    return enumAttribute("referrerpolicy", "no-referrer-when-downgrade");
   }
 
   public static EnumAttribute referrerpolicy(String value) {
@@ -733,6 +805,26 @@ public final class A {
     return stringAttribute("sizes", value);
   }
 
+  public static EnumAttribute typeImageXIcon() {
+    return enumAttribute("type", "image/x-icon");
+  }
+
+  public static EnumAttribute typeTextJavascript() {
+    return enumAttribute("type", "text/javascript");
+  }
+
+  public static EnumAttribute typeApplicationRssXml() {
+    return enumAttribute("type", "application/rss+xml");
+  }
+
+  public static EnumAttribute typeTextCss() {
+    return enumAttribute("type", "text/css");
+  }
+
+  public static ScopedEnumAttribute typeLink(String value) {
+    return scopedEnumAttribute("type", value, LINK_ELEMENTS);
+  }
+
   public static HtmlAttribute colspan(String value) {
     return stringAttribute("colspan", value);
   }
@@ -743,6 +835,10 @@ public final class A {
 
   public static HtmlAttribute headers(String value) {
     return stringAttribute("headers", value);
+  }
+
+  public static EnumAttribute scopeRow() {
+    return enumAttribute("scope", "row");
   }
 
   public static EnumAttribute scopeRowgroup() {
@@ -757,12 +853,8 @@ public final class A {
     return enumAttribute("scope", "col");
   }
 
-  public static EnumAttribute scopeRow() {
-    return enumAttribute("scope", "row");
-  }
-
   public static EnumAttribute scope() {
-    return enumAttribute("scope", "rowgroup");
+    return enumAttribute("scope", "row");
   }
 
   public static EnumAttribute scope(String value) {
@@ -889,6 +981,10 @@ public final class A {
     return booleanAttribute("reversed", value);
   }
 
+  public static EnumAttribute kindChapters() {
+    return enumAttribute("kind", "chapters");
+  }
+
   public static EnumAttribute kindMetadata() {
     return enumAttribute("kind", "metadata");
   }
@@ -905,12 +1001,8 @@ public final class A {
     return enumAttribute("kind", "subtitles");
   }
 
-  public static EnumAttribute kindChapters() {
-    return enumAttribute("kind", "chapters");
-  }
-
   public static EnumAttribute kind() {
-    return enumAttribute("kind", "metadata");
+    return enumAttribute("kind", "chapters");
   }
 
   public static EnumAttribute kind(String value) {

@@ -5,8 +5,8 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.github.xyz-jphil</groupId>
-    <artifactId>xyz-jphil-luvml</artifactId>
+    <groupId>io.github.luvml</groupId>
+    <artifactId>luvml</artifactId>
     <version>2.0</version>
     <packaging>jar</packaging>
     <!-- <name>xyz-jphil-luvml_2.0</name> -->
@@ -18,12 +18,12 @@
     <dependencies>
         <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>xyz-jphil-luvx-base</artifactId> 
+            <artifactId>luvx-base</artifactId> 
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.github.xyz-jphil</groupId>
-            <artifactId>xyz-jphil-luvx-char_sequence</artifactId>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>luvx-char_sequence</artifactId>
             <version>2.0</version>
         </dependency>
     </dependencies>
