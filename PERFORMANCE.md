@@ -2,6 +2,12 @@
 
 Full method, numbers, and every honest caveat behind the one-paragraph conclusion in the [README](README.md#performance).
 
+## Why performance was never the main focus
+
+We are still very highly performant compared to many other engines — it's actually that we are more than enough performant, so we didn't go too deep into obsession along this line. Yes, more improvements can still be made (this whole document is exactly that: where we looked, and what we found), but we don't chase them for their own sake — our own real websites built with luvml are already, and really, very snappy.
+
+Where the effort went instead: bringing CSS into the same typed DSL ([luvs](https://github.com/luvml/luvs)), a typed Vue layer on top ([luvue](https://github.com/luvml/luvue)), and working on the client side too — none of which are priorities for htmlflow, whose own performance is not unachievable for luvml, we simply haven't chased it. That is not to belittle htmlflow — in fact it is our source of inspiration. The tricky bits of the DSL, the self-referencing generics, the design of the DSL itself, are heavily inspired by htmlflow. We dropped a lot of that complexity (while adding a bit of our own), and what came out of it is, we think, quite interesting, powerful and promising.
+
 ## Streaming vs building one big String first
 
 luvml's renderer never builds a whole document as one big `String` before writing it out — it streams straight to a `StringBuilder`, a `Writer`, or your own sink, one write at a time. Measured directly against the naive alternative (return a `String` at every recursion level and concatenate), best-of-3 on JDK 25:
@@ -30,9 +36,7 @@ htmlflow compiles its element tree once and only re-binds leaf values per render
 
 ## On htmlflow, honestly
 
-htmlflow's performance is not unachievable for luvml — we just haven't put in as much effort there, because we prioritized other things instead: bringing CSS into the same typed DSL ([luvs](https://github.com/luvml/luvs)), a typed Vue layer on top ([luvue](https://github.com/luvml/luvue)), and working on the client side too — none of which are priorities for htmlflow. That is not to belittle htmlflow — in fact it is our source of inspiration. The tricky bits of the DSL, the self-referencing generics, the design of the DSL itself, are heavily inspired by htmlflow. We dropped a lot of that complexity (while adding a bit of our own), and what came out of it is, we think, quite interesting, powerful and promising.
-
-So we went and checked, properly, rather than just asserting it:
+So, given the above, we went and checked properly, rather than just asserting it:
 
 **The same effect as htmlflow's compiled view is reachable in luvml today by hand** — cache the static shell as a `String` once, stream only what actually changes per render:
 

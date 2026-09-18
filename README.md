@@ -58,13 +58,7 @@ The full tutorial — every concept, the naming-conflict rules, escape hatches, 
 
 ## Performance
 
-luvml streams straight to its output instead of concatenating strings, and holds up well against comparable Java HTML libraries — 2nd of three on a fair fresh-tree comparison against htmlflow and j2html, and outright faster than htmlflow on one real workload once you use the same tricks htmlflow itself uses internally (verified against htmlflow's own source, not assumed). A real, previously-broken feature (`DynamicFrag`) got found and fixed along the way, and a genuine, permanent `T.raw(...)` escape hatch was added for when you've measured that escaping a specific piece of content is a real cost. Full numbers, method, and every honest caveat: **[PERFORMANCE.md](PERFORMANCE.md)**.
-
-### We're already more than performant enough, so we don't obsess over it
-
-We are still very highly performant compared to many other engines — it's actually that we are more than enough performant, so we didn't go too deep into obsession along this line. Yes, more improvements can still be made (see PERFORMANCE.md above for exactly where), but we don't chase them for their own sake — our own real websites built with luvml are already, and really, very snappy.
-
-Where the effort went instead: bringing CSS into the same typed DSL ([luvs](https://github.com/luvml/luvs)), a typed Vue layer on top ([luvue](https://github.com/luvml/luvue)), and working on the client side too — none of which are priorities for htmlflow, whose own performance is not unachievable for luvml, we simply haven't chased it. That is not to belittle htmlflow — in fact it is our source of inspiration. The tricky bits of the DSL, the self-referencing generics, the design of the DSL itself, are heavily inspired by htmlflow. We dropped a lot of that complexity (while adding a bit of our own), and what came out of it is, we think, quite interesting, powerful and promising.
+luvml streams directly to its output instead of concatenating strings, and holds its own against comparable Java HTML libraries — competitive with, and on one real workload faster than, htmlflow. We've never chased raw throughput as a priority (our own real sites built with luvml are already snappy), but it's been measured honestly and improved where it mattered. Full numbers, method, and why performance was never the main focus: **[PERFORMANCE.md](PERFORMANCE.md)**.
 
 ## What people are saying
 
