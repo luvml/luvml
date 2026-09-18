@@ -7,20 +7,22 @@ A concise guide to using LUVML (Luv Markup Language) - a type-safe Java HTML/XML
 <dependency>
 	<groupId>io.github.luvml</groupId>
 	<artifactId>luvml</artifactId>
-	<version>2.0</version>
+	<version>2.1</version>
 </dependency>
 ```
 
 GitHub repo : https://github.com/luvml/luvml
 
-### The version is `2.0` and stays `2.0`
+### Versions only move on a real, deliberate release — check which one you're actually on
 
-luvml and luvs keep the version `2.0` while their source moves. Maven therefore has no version to compare, never re-resolves, and a build can sit on a months-old jar in `~/.m2` indefinitely with nothing reporting it. **When generated output changes for no reason visible in the source, check this first.** It has already produced one wrong diagnosis: a run emitted spurious diffs across 70 files, which matched a known luvml bug exactly — so the bug was blamed, while the real cause was a jar four months older than the `luvml/C.java` that had already fixed it.
+luvml sat pinned at `2.0` for a long time while its source kept moving underneath it (and `luvx-base`, its own dependency, did the same) — deliberately, to avoid churning versions during rapid internal iteration. `luvml` moved to `2.1` (`luvx-base` moved to `2.1` alongside it, in lockstep — its dependency line in luvml's own pom tracks `${project.version}`) once there was a real, public reason: the streaming-render work, a real bug fix in `DynamicFrag`, real performance fixes, and the new `T.raw(...)` escape hatch. A sibling module that hasn't had that kind of deliberate bump yet (`luvs`, as of this writing) can still sit on a fixed version for a long stretch — the same caveat below still applies to whichever module you're using that hasn't moved.
 
-Compare the dates before believing any luvml symptom, and rebuild if the source is newer:
+**Because of that history, Maven has no version to compare on a build that hasn't been deliberately bumped, never re-resolves, and can sit on a months-old jar in `~/.m2` indefinitely with nothing reporting it.** When generated output changes for no reason visible in the source, check this first. It has already produced one wrong diagnosis: a run emitted spurious diffs across 70 files, which matched a known luvml bug exactly — so the bug was blamed, while the real cause was a jar four months older than the `luvml/C.java` that had already fixed it.
+
+Compare the dates before believing any luvml symptom, and rebuild if the source is newer (adjust the version in the path to whichever one you're actually depending on):
 
 ```bash
-ls -la ~/.m2/repository/io/github/luvml/luvml/2.0/luvml-2.0.jar
+ls -la ~/.m2/repository/io/github/luvml/luvml/2.1/luvml-2.1.jar
 ls -la <luvml-checkout>/luvml/src/main/java/luvml/C.java
 ```
 
@@ -463,9 +465,11 @@ The renderer emits `<!DOCTYPE html>` from the node itself — no concatenation, 
 ### What the renderer does for you (the contract)
 
 - **Escaping is automatic.** Text nodes escape `&` `<` `>`; attribute values also escape `"`. Never pre-escape your strings — there is no `esc()` step in luvml, and passing already-escaped text double-escapes it.
+- **`T.raw(content)` / `T.blockRaw(content)` opt out of both escaping and whitespace normalization — UNSAFE, opt-in only.** Content passed to `raw(...)` is written byte-for-byte by every renderer, exactly like `<script>`/`<style>` content. This exists because escaping and normalizing long free text is real, measured cost (see "Performance" below) — use it only for content you already trust or have already escaped yourself. Passing unescaped user input to `raw(...)` is an XSS vector, no different in effect from string-concatenating HTML by hand, which is exactly what the rest of this DSL exists to prevent. Default to `text(...)`; reach for `raw(...)` only after measuring that escaping a specific, known-safe piece of content is a real cost in your case.
 - **`<style>` and `<script>` are raw text.** Their content is emitted verbatim (not escaped), so a luvs `CssRules`/`CssRule` (both are `CharSequence`) goes straight into `E.style(...)`, and JS goes straight into `E.script(...)`.
 - **Void elements self-close in XHTML mode** (`<meta … />`) and not in HTML mode (`<meta …>`). `asString` / `asFormattedString` default to XHTML; switch with `RenderConfig.builder().htmlMode()`.
 - **`asString` is compact, `asFormattedString` indents.** Same markup, different whitespace — pick compact for bytes-on-the-wire, formatted for human-readable output.
+- **`<pre>` content is reproduced exactly, in both modes.** Every other element gets its text whitespace-normalized (runs of spaces/tabs/newlines collapse to one space — harmless, since a browser does the same to normal flow content) and, in `asFormattedString`, gets structural newlines/indentation injected between children for readability. Inside `<pre>` (and anything nested under it, e.g. `<pre><code>...</code></pre>`) neither happens: the exact string you passed to `text(...)` comes out unchanged, because whitespace there is part of the content, not decoration.
 
 ### Don't embed JS/CSS in Java — load it from a resource file
 
@@ -593,6 +597,96 @@ try (var fileWriter = new FileWriter("output.html")) {
     out.flush();
 }
 ```
+
+### Streaming vs building one big String first
+
+This is the reason PRP 03 exists, measured directly: build a page of N rows, then render it two ways — the real `HtmlRenderer` (writes each fragment straight to a `StringBuilderOut`, one pass) versus a deliberately naive baseline that returns a `String` at every recursion level and concatenates with `+` (the pattern streaming replaced). Best-of-3, JDK 25:
+
+```
+    rows   streaming(ms)  naive-concat(ms)       ratio
+     200             0.8               2.1        2.6x
+     800             1.4               8.6        6.3x
+    3200             5.7             230.9       40.5x
+   12800            27.4            2141.8       78.3x
+   51200           115.1           36111.1      313.6x
+```
+
+Streaming is linear in document size; naive concatenation of a wide container is quadratic, because every `+=` copies everything accumulated so far. The two are barely distinguishable at 200 rows and 313x apart at 51,200 — which is exactly the shape of complaint "large pages are very very slow" turns out to have.
+
+### Performance vs other Java view libraries
+
+Measured with JMH against [htmlflow](https://github.com/xmlet/HtmlFlow) and [j2html](https://github.com/j2html/j2html) on htmlflow's own published benchmark workloads ("stocks" table, "presentations" list — harness: [xmlet/template-benchmark](https://github.com/xmlet/template-benchmark)), throughput on JDK 25. Two comparisons, because there are two honestly different ways to write the luvml side:
+
+**Same style as j2html — a fresh element tree built on every render:**
+
+```
+Benchmark                Mode  Cnt       Score      Error  Units
+HtmlFlow.presentations  thrpt   10  282465.108 ± 44991.081  ops/s
+HtmlFlow.stocks         thrpt   10   64961.171 ±  4532.260  ops/s
+j2html.presentations    thrpt   10   14112.361 ±  1534.358  ops/s
+j2html.stocks           thrpt   10    6695.300 ±   938.550  ops/s
+luvml.presentations     thrpt   10   18616.880 ±  1227.352  ops/s
+luvml.stocks            thrpt   10   18969.710 ±  2425.565  ops/s
+```
+
+htmlflow wins outright here, and the reason is architectural: **htmlflow compiles the element tree once** (`HtmlFlow.view(page -> ...)`) **and re-executes only the per-value bindings on each render**, while luvml and j2html both build a fresh object tree every call — the cost of a plain, no-precompilation builder DSL. Compared on that basis, luvml is 2nd of the three, ~1.3x j2html on the list page and ~2.7x on the table page.
+
+**"Template style" — luvml's shell cached once, only the dynamic rows streamed per render:**
+
+luvml has no built-in per-leaf dynamic-binding API like htmlflow's `.dynamic(...)` (that would need a new node kind in luvml's core, a real design task, not attempted here). But the same *effect* is reachable today, by hand: render the static shell to a `String` once at class-init, split it around a marker, and on each render only build/stream the part that actually varies — hand-written directly, no luvml element objects allocated per row:
+
+```
+Benchmark                     Mode  Cnt       Score       Error  Units
+LuvmlTemplate.presentations  thrpt   10   83929.321 ±  7017.835  ops/s
+LuvmlTemplate.stocks         thrpt   10  112252.437 ±  7449.195  ops/s
+```
+
+On the table page this **beats htmlflow** (112,252 vs 64,961 ops/s) — most of that page is static markup (meta tags, a CSS block) that this approach never rebuilds, and the 20 dynamic rows are cheap to hand-write. On the list page htmlflow still wins clearly (282,465 vs 83,929) — its per-item content there is rendered with `.raw(...)` (unescaped), while luvml's version properly HTML-escapes the same text, which is extra real work htmlflow's number isn't paying for. That asymmetry is disclosed, not hidden: it means the list-page gap is partly "htmlflow skips a safety step here," not purely architecture.
+
+The trade highlighted at the top of this tutorial applies here too: this template style is *harder to write* (hand-rolled string building for the dynamic part, no type safety there) in exchange for not re-allocating the static majority of the page on every render. Reach for it on a hot, high-traffic endpoint where a page's structure is fixed and only a few values change; keep the plain tree-building style everywhere else.
+
+**Is caching a rendered String "cheating" compared to htmlflow?** No — checked against htmlflow's own source rather than assumed. htmlflow does the same thing internally: a one-time "preprocessing" pass turns a view into a chain of `HtmlContinuation` objects, and `HtmlContinuationSyncStatic` holds a precomputed `String staticHtmlBlock` (even `.intern()`-ed) whose entire job on every render is `visitor.write(staticHtmlBlock)`. htmlflow does not regenerate static markup by walking objects on every render either — it also caches pre-rendered static text and only recomputes the genuinely dynamic parts. The `LuvmlTemplate` prototype above independently arrives at the same technique by hand; htmlflow automates it and can interleave many dynamic points in one chain, which is real, and is the gap described next.
+
+### `DynamicFrag`: real, now working, but it does not close the gap
+
+The natural next question: instead of hand-splitting a string, can luvml keep everything inside the typed DSL and still avoid rebuilding the page on every render? There already was a class for this, `luvml.DynamicFrag` — a fragment collection whose `fragments()` re-invokes a `Supplier` on every call, so a slot inside an otherwise-fixed tree can produce fresh content each render. It had zero uses anywhere and turned out to be broken: `MutableContainerElement_A` was eagerly resolving it (calling `.fragments()`) the moment it was added to a parent, at tree-BUILD time, not at render time — so the "dynamic" supplier ran exactly once and froze forever. Fixed in `MutableContainerElement_A` (children now stored unresolved when they're a `Frags_I`, resolved fresh inside `childNodes()`, which the renderer already calls on every render pass) — no change needed to luvx-base.
+
+With that fixed, a genuinely honest template-style render is now possible and stays entirely inside the typed DSL:
+
+```java
+private static final ThreadLocal<List<Stock>> CURRENT = new ThreadLocal<>();
+
+private static final Frag_I<?> TEMPLATE = html(head(...), body(h1(...),
+    table(thead(...), tbody(dynamicFrag(() -> buildRows(CURRENT.get()))))
+));
+
+public static String render(List<Stock> stocks) {
+    CURRENT.set(stocks);
+    try { return HtmlRenderer.asString(TEMPLATE); } finally { CURRENT.remove(); }
+}
+```
+
+Measured, this does **not** reach htmlflow-level throughput — it lands close to plain fresh-tree luvml, sometimes marginally behind it. A second, isolated benchmark makes the reason concrete: hold a large fixed static part and one small dynamic part, and vary the static:dynamic ratio from 50 to 12,800 static paragraphs. Reusing the object tree wins only 1.1x–3.6x, nowhere near the multi-x gap to htmlflow, and does not grow the way object-allocation-avoidance would predict. **The reason: `HtmlRenderer` always does a full generic tree-walk — type-switch dispatch, attribute-map iteration, text escaping — on every render, for every node, whether that node's object was just built or reused. Reusing objects skips allocation; it does not skip the walk-and-escape work, and that work is what dominates.** htmlflow's continuation chain skips the walk entirely for static content, because by the time it renders, the static parts are no longer objects to walk — they're already text.
+
+So: `DynamicFrag` is a real, correctly-scoped, now-working feature — build a tree once, safely rebind a subtree of it per render, without leaving the typed DSL — and that's worth having regardless. It is not, by itself, htmlflow's performance. Actually closing that gap would mean giving luvml its own version of htmlflow's preprocess-into-a-continuation-chain step: automatically precomputing the static text between dynamic points instead of walking objects for it every time. That's a genuine, larger design project, not attempted here — the "cached shell" pattern above remains the fastest option available today, and is now understood to be a legitimate technique rather than a shortcut around the DSL.
+
+### Why `presentations` specifically was slow, and `T.raw(...)`
+
+Diagnosed directly rather than guessed: on the `presentations` page (10 panels, each with a long free-text summary, some 500-800 characters, already containing real HTML entities and `<br/>` tags), **escaping and whitespace-normalizing that text accounted for 70% of total render time.** That explains the disproportionate `stocks`-vs-`presentations` gap — `stocks`' cells are short numbers where escaping is nearly free; `presentations`' summaries are long text where it dominates — and it explains why htmlflow wins presentations by such a wide margin: its own comparator for that page uses `.raw(...)` and pays none of this cost, while luvml's did, correctly, until now optionally.
+
+Two things followed. First, the escaping/normalization code itself got faster (bulk-copying unchanged runs instead of a char-by-char rebuild — a real, verified, safe improvement, but it reduces the cost's constant factor, it doesn't remove the cost). Second, `T.raw(content)` / `T.blockRaw(content)` were added as the genuine escape hatch (documented above under "What the renderer does for you") — several real luvml users were already hand-rolling their own version of this, which is exactly the sign a library is missing something it should provide directly. Using it for the one long field where it matters, matching what htmlflow's own comparator does for the same page:
+
+```
+Benchmark                               stocks (ops/s)   presentations (ops/s)
+htmlflow                                      61,642                  224,834
+luvml, safe (text())                          15,754                   19,547
+luvml, raw() on the long field                     —                   56,088
+luvml+DynamicFrag, safe                       12,549                   16,351
+luvml+DynamicFrag, raw() on the long field          —                   45,525
+luvml, cached-shell style                    103,442                   71,311
+```
+
+Opting into `raw(...)` for the field it matters on is a ~2.8-2.9x win on this page, for both plain luvml and the `DynamicFrag` variant — confirms the diagnosis and delivers exactly the "escape hatch once you've measured you need it" this section promised. htmlflow still wins presentations even against the raw variant (224,834 vs 56,088), and that remaining gap is now honestly attributable to architecture — its continuation-chain rendering versus luvml's generic tree walk — not to safety-by-default, which is the clean signal this whole exercise was for.
 
 ### The doctype goes in the tree
 

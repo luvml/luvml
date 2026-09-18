@@ -130,8 +130,10 @@ public class XHtmlStringRenderer {
                     case Text_T textType -> {
                         var txt = textType.obj();
                         if(txt instanceof LineBreak lb){
-                            sb.append(lb.textContent()); 
+                            sb.append(lb.textContent());
                             addIndent(sb, indent, tabStr);
+                        }else if (txt.isRaw()) {
+                            sb.append(txt.textContent()); // UNSAFE by design - see T.raw(...)
                         }else {
                             sb.append(escapeText(txt.textContent()));
                         }

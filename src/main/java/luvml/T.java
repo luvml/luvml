@@ -27,7 +27,31 @@ public final class T {
     public static InlineText t(String content) {
         return text(content);
     }
-    
+
+    /**
+     * UNSAFE. Creates an inline text node whose content is emitted BYTE-FOR-BYTE by every
+     * renderer -- no whitespace normalization, no HTML escaping. Only use with content you
+     * already trust or have already escaped yourself; passing unescaped user input here is
+     * an XSS vector, identical in effect to string-concatenating HTML by hand, which is
+     * exactly what this DSL otherwise exists to prevent. Prefer {@link #text(String)} unless
+     * you have specifically measured that escaping this content is a real, current cost.
+     * @param content The content to emit verbatim.
+     * @return A new inline raw text node.
+     */
+    public static InlineRawText raw(String content) {
+        return new InlineRawText(content);
+    }
+
+    /**
+     * UNSAFE -- see {@link #raw(String)}. Block variant: creates structural boundaries with
+     * newlines, otherwise identical (no normalization, no escaping).
+     * @param content The content to emit verbatim.
+     * @return A new block raw text node.
+     */
+    public static BlockRawText blockRaw(String content) {
+        return new BlockRawText(content);
+    }
+
     /**
      * Creates a block Text node. Its content will be escaped by a renderer.
      * Creates structural boundaries with newlines for AI comprehension.

@@ -56,28 +56,39 @@ public class HtmlRenderer {
      * Core rendering method using external traversal.
      */
     public static void render(Frag_I<?> frag, Out_I out) {
+        render(frag, out, false);
+    }
+
+    // preserveWhitespace tracks whether we are inside a <pre> (or similar) element,
+    // where content must be reproduced byte-for-byte: no AI-structural newline
+    // injection, and text nodes use wholeText() rather than normalized text().
+    private static void render(Frag_I<?> frag, Out_I out, boolean preserveWhitespace) {
         switch (frag.fragType()) {
             case Attr_T a -> {
                 // Attributes are handled by their parent element
             }
-            case Node_T n -> renderNode(n.node(), out);
+            case Node_T n -> renderNode(n.node(), out, preserveWhitespace);
             case Frags_T f -> {
                 // Render each fragment in the collection
                 for (var fragment : f.frags().fragments()) {
-                    render((Frag_I/*casting due to generic erasure*/)fragment, out);
+                    render((Frag_I/*casting due to generic erasure*/)fragment, out, preserveWhitespace);
                 }
             }
         }
     }
 
-    private static void renderNode(Node_I<?> node, Out_I out) {
+    private static void renderNode(Node_I<?> node, Out_I out, boolean preserveWhitespace) {
         switch (node.nodeType()) {
-            case Element_T e -> renderElement(e.element(), out);
-            case AttributelessNode_T an -> renderAttributelessNode(an, out);
+            case Element_T e -> renderElement(e.element(), out, preserveWhitespace);
+            case AttributelessNode_T an -> renderAttributelessNode(an, out, preserveWhitespace);
         }
     }
 
-    private static void renderElement(Element_I<?> element, Out_I out) {
+    private static boolean preservesWhitespace(Element_I<?> element) {
+        return "pre".equals(element.tagName());
+    }
+
+    private static void renderElement(Element_I<?> element, Out_I out, boolean preserveWhitespace) {
         // Handle ProcessingInstruction special case
         if (element instanceof luvx.ProcessingInstruction_I<?>) {
             out.__("<?").__(element.tagName());
@@ -121,26 +132,34 @@ public class HtmlRenderer {
             case ContainerElement_T c -> {
                 out.__(">");
                 if (c.containerElement().hasChildNodes()) {
-                    // AI-OPTIMIZED: Use MarkupRenderingBehavior instead of primitive child count heuristics
-                    switch (element.markupRenderingBehavior()) {
-                        case luvx.rendering_behavior.InlineMarkupRendering inline -> {
-                            // AI reads as continuous content - no structural boundaries
-                            for (var child : c.containerElement().childNodes()) {
-                                renderNode((luvx.Node_I)child, out);
-                            }
+                    var childPreserve = preserveWhitespace || preservesWhitespace(element);
+                    if (childPreserve) {
+                        // Whitespace-significant content (e.g. <pre>): never inject structural newlines
+                        for (var child : c.containerElement().childNodes()) {
+                            renderNode((luvx.Node_I)child, out, true);
                         }
-                        case luvx.rendering_behavior.BlockMarkupRendering block -> {
-                            // AI sees clear structural boundaries with newlines
-                            var childOut = out.child();
-                            childOut.nL();
-                            var childNodes = c.containerElement().childNodes();
-                            for (int i = 0; i < childNodes.size(); i++) {
-                                if (i > 0) {
-                                    childOut.nL(); // Add newline between child elements
+                    } else {
+                        // AI-OPTIMIZED: Use MarkupRenderingBehavior instead of primitive child count heuristics
+                        switch (element.markupRenderingBehavior()) {
+                            case luvx.rendering_behavior.InlineMarkupRendering inline -> {
+                                // AI reads as continuous content - no structural boundaries
+                                for (var child : c.containerElement().childNodes()) {
+                                    renderNode((luvx.Node_I)child, out, false);
                                 }
-                                renderNode((luvx.Node_I)childNodes.get(i), childOut);
                             }
-                            out.nL();
+                            case luvx.rendering_behavior.BlockMarkupRendering block -> {
+                                // AI sees clear structural boundaries with newlines
+                                var childOut = out.child();
+                                childOut.nL();
+                                var childNodes = c.containerElement().childNodes();
+                                for (int i = 0; i < childNodes.size(); i++) {
+                                    if (i > 0) {
+                                        childOut.nL(); // Add newline between child elements
+                                    }
+                                    renderNode((luvx.Node_I)childNodes.get(i), childOut, false);
+                                }
+                                out.nL();
+                            }
                         }
                     }
                 }
@@ -149,30 +168,38 @@ public class HtmlRenderer {
         }
     }
 
-    private static void renderAttributelessNode(AttributelessNode_T an, Out_I out) {
+    private static void renderAttributelessNode(AttributelessNode_T an, Out_I out, boolean preserveWhitespace) {
         // Get the underlying node to access MarkupRenderingBehavior
         var node = an.attributelessNode();
-        
+
+        if (preserveWhitespace) {
+            renderAttributelessNodeContent(an, out, true);
+            return;
+        }
+
         // AI-OPTIMIZED: Use MarkupRenderingBehavior for consistent rendering decisions
         switch (node.markupRenderingBehavior()) {
             case luvx.rendering_behavior.InlineMarkupRendering inline -> {
                 // Inline rendering - no newlines, continuous flow
-                renderAttributelessNodeContent(an, out);
+                renderAttributelessNodeContent(an, out, false);
             }
             case luvx.rendering_behavior.BlockMarkupRendering block -> {
                 // Block rendering - newlines for AI structural boundaries
                 out.nL();
-                renderAttributelessNodeContent(an, out);
+                renderAttributelessNodeContent(an, out, false);
                 out.nL();
             }
         }
     }
-    
-    private static void renderAttributelessNodeContent(AttributelessNode_T an, Out_I out) {
+
+    private static void renderAttributelessNodeContent(AttributelessNode_T an, Out_I out, boolean preserveWhitespace) {
         switch (an.attributelessNodeType()) {
             case StringNode_T s -> {
                 switch (s.stringNodeType()) {
-                    case Text_T t -> out.__(escapeTextContent(t.text().textContent()));
+                    case Text_T t -> {
+                        var content = preserveWhitespace ? t.text().wholeText() : t.text().textContent();
+                        out.__(t.text().isRaw() ? content : escapeTextContent(content));
+                    }
                     case Comment_T c -> {
                         String content = c.comment().textContent();
                         validateCommentContent(content);
@@ -192,17 +219,53 @@ public class HtmlRenderer {
     private static String escapeTextContent(String text) {
         if (text == null) return "";
         // TODO: Add unicode escaping option for non-UTF8 output
-        return text.replace("&", "&amp;")
-                   .replace("<", "&lt;")
-                   .replace(">", "&gt;");
+        return escape(text, false);
     }
 
     private static String escapeAttributeValue(String value) {
         if (value == null) return "";
-        return value.replace("&", "&amp;")
-                    .replace("<", "&lt;")
-                    .replace(">", "&gt;")
-                    .replace("\"", "&quot;");
+        return escape(value, true);
+    }
+
+    // Single scan instead of three/four chained String.replace() calls, each of which was a
+    // full pass over the whole string regardless of whether it matched. Returns the original
+    // String instance unchanged (zero copies) when nothing needs escaping, which is the common
+    // case for most text and attribute values.
+    static String escape(String s, boolean isAttribute) {
+        var len = s.length();
+        var firstToEscape = -1;
+        for (var i = 0; i < len; i++) {
+            var c = s.charAt(i);
+            if (c == '&' || c == '<' || c == '>' || (isAttribute && c == '"')) {
+                firstToEscape = i;
+                break;
+            }
+        }
+        if (firstToEscape < 0) return s; // fast path: zero copies, the common (clean) case
+
+        // One pass, bulk-copying each unchanged gap with sb.append(s, from, to) instead of
+        // appending character-by-character, and instead of the 3-4 separate full-string
+        // String.replace() passes this used to chain. Measured on long text with multiple
+        // real entities (e.g. repeated "<br/>"/"&#8220;" in free-text content): faster than
+        // both the naive char-by-char rebuild AND the chained-replace fallback it replaced.
+        var sb = new StringBuilder(len + 32);
+        var gapStart = 0;
+        for (var i = firstToEscape; i < len; i++) {
+            var c = s.charAt(i);
+            var replacement = switch (c) {
+                case '&' -> "&amp;";
+                case '<' -> "&lt;";
+                case '>' -> "&gt;";
+                case '"' -> isAttribute ? "&quot;" : null;
+                default -> null;
+            };
+            if (replacement != null) {
+                sb.append(s, gapStart, i).append(replacement);
+                gapStart = i + 1;
+            }
+        }
+        sb.append(s, gapStart, len);
+        return sb.toString();
     }
 
     private static void validateCommentContent(String content) {
